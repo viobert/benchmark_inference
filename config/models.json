@@ -1,0 +1,60 @@
+{
+  "main": "vllm_chat_local",
+  "models": {
+    "vllm_chat_local": {
+      "interface": "chat",
+      "model_name": "Qwen/Qwen2.5-7B-Instruct",
+      "base_url": "http://127.0.0.1:8000/v1",
+      "api_key": "EMPTY",
+      "rate_limit_delay": 0.0,
+      "generation": {
+        "temperature": 0.0,
+        "max_tokens": 256
+      },
+      "serve": {
+        "enabled": true,
+        "host": "127.0.0.1",
+        "port": 8000,
+        "model_path": "Qwen/Qwen2.5-7B-Instruct",
+        "tensor_parallel_size": 2,
+        "max_model_len": 8192,
+        "dtype": "auto",
+        "gpu_memory_utilization": 0.9,
+        "log_file": "logs/vllm_chat_local.log"
+      }
+    },
+    "vllm_responses_local": {
+      "interface": "responses",
+      "model_name": "Qwen/Qwen2.5-7B-Instruct",
+      "base_url": "http://127.0.0.1:8000/v1",
+      "api_key": "EMPTY",
+      "rate_limit_delay": 0.0,
+      "generation": {
+        "temperature": 0.0,
+        "max_output_tokens": 256
+      },
+      "serve": {
+        "enabled": true,
+        "host": "127.0.0.1",
+        "port": 8000,
+        "model_path": "Qwen/Qwen2.5-7B-Instruct",
+        "tensor_parallel_size": 2,
+        "max_model_len": 8192,
+        "dtype": "auto",
+        "gpu_memory_utilization": 0.9,
+        "log_file": "logs/vllm_responses_local.log"
+      }
+    },
+    "remote_chat_api": {
+      "interface": "chat",
+      "model_name": "your-remote-model",
+      "base_url": "https://api.example.com/v1",
+      "api_key": "YOUR_API_KEY",
+      "rate_limit_delay": 0.2,
+      "generation": {
+        "temperature": 0.2,
+        "max_tokens": 512
+      }
+    }
+  }
+}
