@@ -5,9 +5,10 @@ __pycache__/
 .vscode/
 .idea/
 .stfolder/
+.stignore
 *.log
 
-cofig/
+config/
 logs/
 prompt/
 reports/
