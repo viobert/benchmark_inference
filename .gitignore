@@ -10,5 +10,4 @@ __pycache__/
 
 config/
 logs/
-prompt/
 reports/
