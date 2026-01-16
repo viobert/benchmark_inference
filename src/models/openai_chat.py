@@ -59,7 +59,7 @@ class ChatCompletionsModel(BaseModel):
     ) -> List[str]:
         params = self._merge_params(temperature, max_tokens, kwargs)
         results: List[str] = []
-
+        
         for prompt in prompts:
             resp = self.client.chat.completions.create(
                 model=self.model_name,

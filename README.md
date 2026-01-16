@@ -14,16 +14,35 @@
 ```
 ./scripts/launch_vllm.sh config/models.json vllm_chat_local
 ./scripts/run_inference.sh config/models.json vllm_chat_local \
-  prompt/simple_vuln_prompt.txt reports/out.jsonl --no_launch
+  prompt/simple_vuln_prompt.txt --no_launch
 ```
 
 方式二：推理脚本自动启动服务
 ```
 ./scripts/run_inference.sh config/models.json vllm_chat_local \
-  prompt/simple_vuln_prompt.txt reports/out.jsonl
+  prompt/simple_vuln_prompt.txt
 ```
 
 如果你已经手动启动了服务，请加 `--no_launch`，避免重复启动。
+
+## 输出说明
+
+默认会生成以下 4 类文件，并且同一次运行的文件名保持一致：
+- `logs/vllm/<run_name>.log`
+- `logs/infer/<run_name>.log`
+- `reports/outputs/<run_name>.jsonl`
+- `reports/metrics/<run_name>.csv`
+
+`run_name` 默认格式为 `[模型名]_YYYYMMDD-HHMMSS`，也可通过 `--run_name` 或 `--output` 自定义。
+
+## 数据输入（可选）
+
+如果需要评估指标，请传入 `--data_file`（支持 `.jsonl` / `.json` / `.csv`）。
+数据行需要包含标签字段（默认 `label`），并可用于渲染 prompt 模板中的占位符：
+
+```json
+{"id": "sample-1", "code": "int a=0;", "label": true}
+```
 
 ## 配置说明（config/models.json）
 
@@ -46,6 +65,71 @@
   - `dtype`
   - `gpu_memory_utilization`
   - `log_file`
+
+Example:
+```json
+{
+  "main": "vllm_chat_local",
+  "models": {
+    "vllm_chat_local": {
+      "interface": "chat",
+      "model_name": "Qwen/Qwen2.5-7B-Instruct",
+      "base_url": "http://127.0.0.1:8000/v1",
+      "api_key": "EMPTY",
+      "rate_limit_delay": 0.0,
+      "generation": {
+        "temperature": 0.0,
+        "max_tokens": 256
+      },
+      "serve": {
+        "enabled": true,
+        "host": "127.0.0.1",
+        "port": 8000,
+        "model_path": "Qwen/Qwen2.5-7B-Instruct",
+        "tensor_parallel_size": 2,
+        "max_model_len": 8192,
+        "dtype": "auto",
+        "gpu_memory_utilization": 0.9,
+        "log_file": "logs/vllm_chat_local.log"
+      }
+    },
+    "vllm_responses_local": {
+      "interface": "responses",
+      "model_name": "Qwen/Qwen2.5-7B-Instruct",
+      "base_url": "http://127.0.0.1:8000/v1",
+      "api_key": "EMPTY",
+      "rate_limit_delay": 0.0,
+      "generation": {
+        "temperature": 0.0,
+        "max_output_tokens": 256
+      },
+      "serve": {
+        "enabled": true,
+        "host": "127.0.0.1",
+        "port": 8000,
+        "model_path": "Qwen/Qwen2.5-7B-Instruct",
+        "tensor_parallel_size": 2,
+        "max_model_len": 8192,
+        "dtype": "auto",
+        "gpu_memory_utilization": 0.9,
+        "log_file": "logs/vllm_responses_local.log"
+      }
+    },
+    "remote_chat_api": {
+      "interface": "chat",
+      "model_name": "your-remote-model",
+      "base_url": "https://api.example.com/v1",
+      "api_key": "YOUR_API_KEY",
+      "rate_limit_delay": 0.2,
+      "generation": {
+        "temperature": 0.2,
+        "max_tokens": 512
+      }
+    }
+  }
+}
+
+```
 
 如果使用远端 API，不需要 `serve` 段，或者设置 `"enabled": false`。
 

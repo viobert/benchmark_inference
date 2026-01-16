@@ -3,7 +3,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
 def _join_url(base_url: str, path: str) -> str:
@@ -33,7 +33,7 @@ def build_vllm_command(
     if port:
         cmd += ["--port", str(port)]
 
-    tp_size = serve_cfg.get("tensor_parallel_size")
+    tp_size, _ = _parse_tensor_parallel_size(serve_cfg.get("tensor_parallel_size"))
     if tp_size:
         cmd += ["--tensor-parallel-size", str(tp_size)]
 
@@ -41,33 +41,59 @@ def build_vllm_command(
     if max_model_len:
         cmd += ["--max-model-len", str(max_model_len)]
 
-    dtype = serve_cfg.get("dtype")
-    if dtype:
-        cmd += ["--dtype", str(dtype)]
+    # dtype = serve_cfg.get("dtype")
+    # if dtype:
+    #     cmd += ["--dtype", str(dtype)]
 
     gpu_memory_utilization = serve_cfg.get("gpu_memory_utilization")
     if gpu_memory_utilization is not None:
         cmd += ["--gpu-memory-utilization", str(gpu_memory_utilization)]
 
-    quantization = serve_cfg.get("quantization")
-    if quantization:
-        cmd += ["--quantization", str(quantization)]
-
-    served_model_name = serve_cfg.get("served_model_name")
+    served_model_name = serve_cfg.get("model_name")
     if served_model_name:
         cmd += ["--served-model-name", str(served_model_name)]
 
     if serve_cfg.get("trust_remote_code"):
         cmd.append("--trust-remote-code")
 
-    if serve_cfg.get("enforce_eager"):
-        cmd.append("--enforce-eager")
-
     extra_args = serve_cfg.get("extra_args")
     if extra_args:
         cmd.extend([str(arg) for arg in extra_args])
 
     return cmd
+
+
+def _parse_tensor_parallel_size(
+    value: Any,
+) -> Tuple[Optional[int], Optional[str]]:
+    if value is None:
+        return None, None
+    if isinstance(value, int):
+        return value, None
+    if isinstance(value, str):
+        raw_tokens = [token.strip() for token in value.split(",") if token.strip()]
+        if not raw_tokens:
+            raise ValueError("tensor_parallel_size must not be empty.")
+        try:
+            devices = [str(int(token)) for token in raw_tokens]
+        except ValueError as exc:
+            raise ValueError(
+                "tensor_parallel_size must be an int or a comma-separated list of ints."
+            ) from exc
+        return len(devices), ",".join(devices)
+    if isinstance(value, Sequence):
+        if not value:
+            raise ValueError("tensor_parallel_size must not be empty.")
+        try:
+            devices = [str(int(token)) for token in value]
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "tensor_parallel_size must be an int or a list of ints."
+            ) from exc
+        return len(devices), ",".join(devices)
+    raise ValueError(
+        "tensor_parallel_size must be an int or a comma-separated list of ints."
+    )
 
 
 def ensure_vllm_server(
@@ -92,6 +118,11 @@ def ensure_vllm_server(
 
     env = os.environ.copy()
     env.update(serve_cfg.get("env", {}))
+    _, visible_devices = _parse_tensor_parallel_size(
+        serve_cfg.get("tensor_parallel_size")
+    )
+    if visible_devices:
+        env["CUDA_VISIBLE_DEVICES"] = visible_devices
 
     log_file = serve_cfg.get("log_file")
     stdout = None
