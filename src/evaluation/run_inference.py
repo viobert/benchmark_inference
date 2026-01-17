@@ -126,11 +126,16 @@ def col_fn(
         if isinstance(dataset, DatasetDict) or isinstance(dataset, dict):
             if not dataset:
                 raise ValueError("Dataset dict is empty.")
-            first_split = next(iter(dataset.keys()))
-            logger.warning(
-                "Dataset is a dict; using first split '%s'.", first_split
-            )
-            dataset = dataset[first_split]
+            if "test" in dataset:
+                logger.info("Dataset is a dict; using 'test' split.")
+                dataset = dataset["test"]
+            else:
+                first_split = next(iter(dataset.keys()))
+                logger.warning(
+                    "Dataset is a dict; 'test' split not found, using '%s'.",
+                    first_split,
+                )
+                dataset = dataset[first_split]
     except Exception:
         logger.exception("Failed to load dataset from %s", dataset_path)
         raise
