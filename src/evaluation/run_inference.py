@@ -12,7 +12,6 @@ from typing import Optional, Tuple, List
 from datasets import Dataset, DatasetDict, load_from_disk
 from tqdm import tqdm
 
-from src.utils.labels import normalize_label
 from src.utils.metrics import compute_binary_metrics
 from src.utils.output_parser import extract_prediction
 from src.models.registry import build_model
@@ -117,9 +116,7 @@ def col_fn(
     limit: Optional[int] = None,
 ) -> Dataset:
     """
-    Load a HuggingFace Dataset and add:
-      - prompt
-      - normalized label
+    Load a HuggingFace Dataset and add prompt.
     """
     if not dataset_path.exists():
         raise FileNotFoundError(f"Dataset path does not exist: {dataset_path}")
@@ -151,8 +148,11 @@ def col_fn(
     template = prompt_file.read_text(encoding="utf-8")
 
     def _add_prompt(record: dict) -> dict:
+        prompt_record = {
+            k: v for k, v in record.items() if k not in ("label", "labels")
+        }
         try:
-            prompt = template.format_map(record)
+            prompt = template.format_map(prompt_record)
         except KeyError as e:
             raise KeyError(
                 f"Missing field {e} required by prompt template"
@@ -160,7 +160,6 @@ def col_fn(
 
         return {
             "prompt": prompt,
-            "label": normalize_label(record.get("label")),
         }
 
     logger.info("Building prompts for %d samples", len(dataset))
@@ -275,7 +274,7 @@ def main():
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
     metrics = compute_binary_metrics(
-        labels=[s["label"] for s in samples],
+        labels=[s["vul"] for s in samples],
         preds=predictions,
     )
 
