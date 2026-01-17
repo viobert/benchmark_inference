@@ -3,8 +3,8 @@ set -euo pipefail
 
 CONFIG_PATH="config/models.json"
 MODEL_KEY=""
-PROMPT_FILE="prompt/simple_vuln_prompt.txt"
-DATASET="/home/skl/mkx/data/big_vul/datasets/big_vul"
+PROMPT_FILE=""
+DATASET=""
 EXTRA_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -34,13 +34,17 @@ done
 
 ARGS=(
   --config "$CONFIG_PATH"
-  --prompt_file "$PROMPT_FILE"
-  --dataset "${DATASET:-}"
   --limit 10
 )
 
 if [[ -n "$MODEL_KEY" ]]; then
   ARGS+=(--model "$MODEL_KEY")
+fi
+if [[ -n "$PROMPT_FILE" ]]; then
+  ARGS+=(--prompt_file "$PROMPT_FILE")
+fi
+if [[ -n "$DATASET" ]]; then
+  ARGS+=(--dataset "$DATASET")
 fi
 
 if [[ ${#EXTRA_ARGS[@]} -gt 0 ]]; then

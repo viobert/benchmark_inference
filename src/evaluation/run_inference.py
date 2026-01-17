@@ -173,8 +173,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     parser.add_argument("--model", default=None)
-    parser.add_argument("--prompt_file", required=True)
-    parser.add_argument("--dataset", required=True)
+    parser.add_argument("--prompt_file", default=None)
+    parser.add_argument("--dataset", default=None)
     parser.add_argument("--no_launch", action="store_true")
     parser.add_argument("--launch_timeout", type=float, default=120.0)
     parser.add_argument(
@@ -192,10 +192,20 @@ def parse_args() -> argparse.Namespace:
 def main():
     args = parse_args()
 
-    prompt_file = Path(args.prompt_file)
-    dataset_path = Path(args.dataset)
+    config_path = Path(args.config)
+    config_data = json.loads(config_path.read_text(encoding="utf-8"))
+    
+    prompt_file_value = args.prompt_file or config_data.get("prompt_file")
+    dataset_value = args.dataset or config_data.get("dataset")
+    if not prompt_file_value or not dataset_value:
+        raise ValueError(
+            "Missing prompt_file or dataset; pass flags or set them in config."
+        )
 
-    model_cfg, model_key = load_model_config(Path(args.config), args.model)
+    prompt_file = Path(prompt_file_value)
+    dataset_path = Path(dataset_value)
+
+    model_cfg, model_key = load_model_config(config_path, args.model)
     model_name = model_cfg.get("model_name", model_key)
 
     base_name = build_default_run_name(model_name)
