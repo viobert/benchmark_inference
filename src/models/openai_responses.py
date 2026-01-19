@@ -2,6 +2,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from .base import BaseModel
+from src.utils.prompt_parser import parse_prompt
 
 
 class ResponsesModel(BaseModel):
@@ -84,9 +85,17 @@ class ResponsesModel(BaseModel):
         results: List[str] = []
 
         for prompt in prompts:
+            parsed = parse_prompt(prompt)
+            if parsed["system"]:
+                input_payload: Any = [
+                    {"role": "system", "content": parsed["system"]},
+                    {"role": "user", "content": parsed["user"]},
+                ]
+            else:
+                input_payload = parsed["user"]
             resp = self.client.responses.create(
                 model=self.model_name,
-                input=prompt,
+                input=input_payload,
                 **params,
             )
             results.append(self._extract_text(resp))

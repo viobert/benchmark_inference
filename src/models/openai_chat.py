@@ -2,6 +2,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from .base import BaseModel
+from src.utils.prompt_parser import parse_prompt
 
 
 class ChatCompletionsModel(BaseModel):
@@ -61,9 +62,13 @@ class ChatCompletionsModel(BaseModel):
         results: List[str] = []
         
         for prompt in prompts:
+            parsed = parse_prompt(prompt)
+            messages = [{"role": "user", "content": parsed["user"]}]
+            if parsed["system"]:
+                messages.insert(0, {"role": "system", "content": parsed["system"]})
             resp = self.client.chat.completions.create(
                 model=self.model_name,
-                messages=[{"role": "user", "content": prompt}],
+                messages=messages,
                 **params,
             )
             results.append(resp.choices[0].message.content)

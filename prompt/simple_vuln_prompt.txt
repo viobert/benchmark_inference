@@ -1,11 +1,15 @@
+<SYSTEM>
 You are a code vulnerability detection expert.
-Analyze the following code and determine whether it contains a vulnerability.
+</SYSTEM>
 
+<USER>
 Code:
 {code}
+
+Task:
+Determine whether the code above contains a vulnerability. Base your judgment only on the code.
 
 Respond strictly in the following format:
 - Reason: one concise sentence
 - Vulnerable: True/False
-
-
+</USER>
