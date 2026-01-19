@@ -106,6 +106,29 @@ def build_base_url_from_serve(serve_cfg: dict) -> str:
     port = serve_cfg.get("port") or 8000
     return f"http://{host}:{port}/v1"
 
+
+def resolve_truncate_tokens(
+    args: argparse.Namespace,
+    model_cfg: dict,
+) -> Optional[int]:
+    if args.truncate_prompt_tokens is not None:
+        return args.truncate_prompt_tokens
+    serve_cfg = model_cfg.get("serve")
+    if not serve_cfg or serve_cfg.get("enabled", True) is False:
+        return None
+    max_model_len = serve_cfg.get("max_model_len")
+    if max_model_len is None:
+        return None
+    generation = model_cfg.get("generation", {})
+    interface = model_cfg.get("interface", "chat")
+    if interface == "responses":
+        max_tokens = generation.get("max_output_tokens")
+    else:
+        max_tokens = generation.get("max_tokens")
+    if max_tokens is None:
+        return None
+    return max_model_len - max_tokens
+
 # ---------------------------------------------------------------------------
 # Dataset construction
 # ---------------------------------------------------------------------------
@@ -114,6 +137,9 @@ def col_fn(
     prompt_file: Path,
     dataset_path: Path,
     limit: Optional[int] = None,
+    truncate_tokens: Optional[int] = None,
+    truncate_side: str = "left",
+    tokenizer: Optional[str] = None,
 ) -> Dataset:
     """
     Load a HuggingFace Dataset and add prompt.
@@ -151,8 +177,28 @@ def col_fn(
         logger.info("Limiting to first %d samples", limit)
 
     template = prompt_file.read_text(encoding="utf-8")
+    tokenizer_instance = None
+    truncated_ids: List[str] = []
 
-    def _add_prompt(record: dict) -> dict:
+    if truncate_tokens is not None:
+        if truncate_tokens < 0:
+            raise ValueError("truncate_tokens must be a non-negative integer.")
+        if not tokenizer:
+            raise ValueError(
+                "tokenizer is required when truncation is enabled."
+            )
+        try:
+            from transformers import AutoTokenizer
+        except ImportError as exc:
+            raise ImportError(
+                "transformers is required for prompt truncation. "
+                "Install it with `pip install transformers`."
+            ) from exc
+        tokenizer_instance = AutoTokenizer.from_pretrained(tokenizer, use_fast=True)
+        if truncate_side not in ("left", "right"):
+            raise ValueError("truncate_side must be 'left' or 'right'.")
+
+    def _add_prompt(record: dict, idx: int) -> dict:
         prompt_record = {
             k: v for k, v in record.items() if k not in ("label", "labels")
         }
@@ -162,13 +208,36 @@ def col_fn(
             raise KeyError(
                 f"Missing field {e} required by prompt template"
             ) from e
+        if tokenizer_instance is not None and truncate_tokens is not None:
+            token_ids = tokenizer_instance.encode(prompt, add_special_tokens=False)
+            if len(token_ids) > truncate_tokens:
+                if truncate_side == "left":
+                    token_ids = token_ids[-truncate_tokens:]
+                else:
+                    token_ids = token_ids[:truncate_tokens]
+                prompt = tokenizer_instance.decode(
+                    token_ids,
+                    skip_special_tokens=False,
+                    clean_up_tokenization_spaces=False,
+                )
+                record_id = record.get("id", idx)
+                truncated_ids.append(str(record_id))
 
         return {
             "prompt": prompt,
         }
 
     logger.info("Building prompts for %d samples", len(dataset))
-    return dataset.map(_add_prompt)
+    dataset = dataset.map(_add_prompt, with_indices=True)
+    if truncated_ids:
+        logger.warning(
+            "Truncated %d prompts (side=%s, tokens=%d). ids: %s",
+            len(truncated_ids),
+            truncate_side,
+            truncate_tokens,
+            ", ".join(truncated_ids),
+        )
+    return dataset
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -187,6 +256,18 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Use only the first N samples from the dataset.",
+    )
+    parser.add_argument(
+        "--truncate_prompt_tokens",
+        type=int,
+        default=None,
+        help="Truncate prompts to the last/first N tokens before inference.",
+    )
+    parser.add_argument(
+        "--truncate_side",
+        choices=["left", "right"],
+        default="left",
+        help="Truncate from the left (keep last tokens) or right (keep first tokens).",
     )
     return parser.parse_args()
 
@@ -236,7 +317,26 @@ def main():
             startup_timeout=args.launch_timeout,
         )
 
-    samples = col_fn(prompt_file, dataset_path, limit=args.limit)
+    truncate_tokens = resolve_truncate_tokens(args, model_cfg)
+    if truncate_tokens is not None and truncate_tokens < 0:
+        logger.warning(
+            "Computed truncate tokens is negative (%d); disabling truncation.",
+            truncate_tokens,
+        )
+        truncate_tokens = None
+    truncate_side = args.truncate_side or "left"
+    tokenizer = (
+        model_cfg.get("serve", {}).get("model_path")
+    )
+
+    samples = col_fn(
+        prompt_file,
+        dataset_path,
+        limit=args.limit,
+        truncate_tokens=truncate_tokens,
+        truncate_side=truncate_side,
+        tokenizer=tokenizer if truncate_tokens is not None else None,
+    )
     if len(samples) == 0:
         logger.error("Dataset is empty after prompt construction.")
         raise SystemExit(1)
