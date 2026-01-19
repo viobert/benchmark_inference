@@ -56,6 +56,13 @@ def build_vllm_command(
     if serve_cfg.get("trust_remote_code"):
         cmd.append("--trust-remote-code")
 
+    chat_template = serve_cfg.get("chat_template")
+    chat_template_path = serve_cfg.get("chat_template_path")
+    if chat_template_path:
+        cmd += ["--chat-template", str(chat_template_path)]
+    elif chat_template:
+        cmd += ["--chat-template", str(chat_template)]
+
     extra_args = serve_cfg.get("extra_args")
     if extra_args:
         cmd.extend([str(arg) for arg in extra_args])
