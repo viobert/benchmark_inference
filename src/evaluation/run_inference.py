@@ -12,7 +12,8 @@ from typing import Optional, Tuple, List
 from datasets import Dataset, DatasetDict, load_from_disk
 from tqdm import tqdm
 
-from src.utils.metrics import compute_binary_metrics
+from src.utils.labels import label_from_id
+from src.utils.metrics import metrics_from_counts
 from src.utils.output_parser import extract_prediction
 from src.models.registry import build_model
 from src.server.vllm_server import ensure_vllm_server
@@ -344,8 +345,6 @@ def main():
     model = build_model(model_cfg)
 
     results: List[dict] = []
-    predictions: List[Optional[bool]] = []
-
     tp = tn = fp = fn = 0
 
     progress = tqdm(range(len(samples)), desc="Infer", unit="sample")
@@ -357,10 +356,10 @@ def main():
         output = outputs[0] if outputs else ""
 
         pred = extract_prediction(output)
-        id = sample['id']
-        label = sample["vul"]
-
-        predictions.append(pred)
+        record_id = sample.get("id", idx)
+        label = label_from_id(record_id)
+        if label is None and record_id is not None:
+            logger.warning("Unknown id prefix for id '%s'", record_id)
 
         if label is not None and pred is not None:
             if label and pred:
@@ -376,7 +375,7 @@ def main():
 
         results.append(
             {
-                "id": str(id),
+                "id": str(record_id),
                 "output": output,
                 "label": label,
                 "prediction": pred,
@@ -388,10 +387,7 @@ def main():
         for r in results:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
-    metrics = compute_binary_metrics(
-        labels=[s["vul"] for s in samples],
-        preds=predictions,
-    )
+    metrics = metrics_from_counts(tp, tn, fp, fn)
 
     logger.info(
         "Metrics: tp=%s tn=%s fp=%s fn=%s acc=%.6f prec=%.6f recall=%.6f f1=%.6f",
