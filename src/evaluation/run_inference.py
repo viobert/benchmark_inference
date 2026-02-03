@@ -111,6 +111,7 @@ def build_base_url_from_serve(serve_cfg: dict) -> str:
 def resolve_truncate_tokens(
     args: argparse.Namespace,
     model_cfg: dict,
+    buffer_size: int = 128,
 ) -> Optional[int]:
     if args.truncate_prompt_tokens is not None:
         return args.truncate_prompt_tokens
@@ -128,7 +129,8 @@ def resolve_truncate_tokens(
         max_tokens = generation.get("max_tokens")
     if max_tokens is None:
         return None
-    return max_model_len - max_tokens
+    return max_model_len - max_tokens - buffer_size
+
 
 # ---------------------------------------------------------------------------
 # Dataset construction
